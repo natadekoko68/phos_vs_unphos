@@ -1,0 +1,36 @@
+# ==========================================================================
+#  pip / venv 用の依存パッケージ (conda 不要)
+#
+#    python3 -m venv .venv
+#    source .venv/bin/activate
+#    pip install -r requirements.txt
+#    pip install "openmm[cuda12]"     # ← GPU 用。CUDA のメジャー版に合わせる
+#
+#  scripts/setup_env.sh がこれを全部自動でやります。
+# ==========================================================================
+
+# --- MD 本体 ---
+# openmm 単体だと CPU / OpenCL プラグインしか入りません。
+# GPU (CUDA) を使うには extra 付きで入れてください:
+#     pip install "openmm[cuda12]"    # ドライバが CUDA 12.x 対応のとき
+#     pip install "openmm[cuda13]"    # ドライバが CUDA 13.x 対応のとき
+#     pip install "openmm[hip6]"      # AMD GPU (ROCm 6)
+# extra は libOpenMMCUDA.so を含む OpenMM-CUDA-** ホイールを追加で入れるだけで、
+# CUDA Toolkit 本体のインストールは不要です (NVIDIA ドライバだけあれば動きます)。
+openmm>=8.1
+
+# --- 解析 ---
+mdtraj>=1.9
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+PyYAML>=6.0
+scikit-learn>=1.2      # 主成分分析 (analyze.py の distance-matrix PCA)
+
+# --- 任意: 図の日本語ラベル用 ---------------------------------------------
+# 入っていなくても動きます (その場合は図が英語ラベルになります)。
+# OS 側に日本語フォントがあるなら不要です:
+#     Debian/Ubuntu:  sudo apt install fonts-noto-cjk
+# 権限が無い環境ではこちら:
+# japanize-matplotlib

@@ -1,0 +1,85 @@
+# ==========================================================================
+#  CALVADOS 2 + リン酸化残基モデル  設定ファイル
+#  (Rauh et al., Biophys. J. 125, 396-405, 2026)
+# ==========================================================================
+project: idr_phospho
+outdir: runs                # 出力先 (config.yaml からの相対パス)
+
+simulation:
+  # --- 溶液条件 ---
+  temperature: 298.0        # K
+  ionic_strength: 0.15      # M  (生理条件)
+  pH: 7.4                   # pSer の電荷 q = -1.96 になる
+
+  # --- 積分 ---
+  timestep_fs: 10.0         # CALVADOS の標準
+  friction_per_ps: 0.01     # 弱いカップリング = サンプリングを速くする
+  seed: 2026
+
+  # --- 力場 ---
+  eps_factor: 0.2           # -> eps = 0.8368 kJ/mol
+  cutoff_lj_nm: 2.0         # Ashbaugh-Hatch
+  cutoff_dh_nm: 4.0         # Debye-Hueckel
+  dlambda: -0.37            # リン酸化による stickiness シフト (論文の最終値)
+
+  # --- ボックス ---
+  box_nm: auto              # auto -> ceil((N-1)*0.38 + 4) nm
+
+  # --- 長さ ---
+  total_time_ns: 1000       # 1 us / レプリカ
+  save_interval_ps: 200     # -> 5000 フレーム / レプリカ
+  equil_time_ns: 100        # 解析で捨てる冒頭 (10 %)
+  n_replicas: 4             # GPU 台数に合わせて増減する
+
+  # 1 プロセスの壁時計時間の上限 [h]。超えるとチェックポイントを保存して
+  # exit 85 し、HTCondor が自動で再キュー -> 続きから再開する。
+  # NMRbox は「1 ジョブ 8 時間以内」を推奨しているので 7 にしてある。
+  # 0 にすると無制限 (自前マシンで回すときはこちら)。
+  max_wall_hours: 7
+
+# ==========================================================================
+#  シミュレーションする系
+#    mode: phospho / unphos / charge / mimetic
+#      phospho : 論文の data-driven モデル (dlambda=-0.37, bead 拡大, q~-2)
+#      unphos  : pS/pT をすべて非リン酸化に戻す
+#      charge  : サイズ・stickiness は Ser/Thr のまま電荷だけ ~-2 (論文の比較モデル)
+#      mimetic : pSer->Asp, pThr->Glu (phosphomimetic)
+# ==========================================================================
+systems:
+  unphos:
+    fasta: sequences/unphos.fasta
+    mode: unphos
+    label: "非リン酸化"
+
+  phos:
+    fasta: sequences/phos.fasta
+    mode: phospho
+    label: "12x pSer"
+
+  # --- 以下は任意。論文 Fig.3 の比較モデルを試したいとき有効化する ---
+  # phos_charge:
+  #   fasta: sequences/phos.fasta
+  #   mode: charge
+  #   label: "電荷のみ (-2)"
+  # phos_mimetic:
+  #   fasta: sequences/phos.fasta
+  #   mode: mimetic
+  #   label: "phosphomimetic (S->D)"
+
+# ==========================================================================
+#  解析
+# ==========================================================================
+analysis:
+  compare: [unphos, phos]       # 比較してプロットする系
+  n_extreme_structures: 5       # コンパクト側 / 伸長側それぞれ何構造を保存するか
+  bins: 60
+
+  # --- 主成分分析 (距離行列 PCA) ---
+  pca: true                     # false にすると PCA をスキップする
+  pca_residue_stride: 3         # 特徴量に使う残基を間引く間隔 (1=全残基対、重い)
+  pca_max_frames_per_system: 4000  # PCA フィッティングに使う最大フレーム数/系
+  pca_n_components: 5           # 計算する主成分の数
+
+  # --- 分子内相互作用の解析 ---
+  interactions: true            # false にするとスキップする
+  contact_cutoff_factor: 1.5    # 接触判定の距離 = この値 * (sigma_i+sigma_j)/2
