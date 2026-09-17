@@ -1,0 +1,64 @@
+# ==========================================================================
+#  HTCondor submit file : CALVADOS リン酸化 IDR シミュレーション
+#  NMRbox の HTCondor プール向け。
+#
+#  << このファイルは「GPU の質を問わず、とにかく多くのノードにマッチさせる」
+#     方針で設定してあります。>>
+#
+#  1 ジョブ = 1 GPU = 1 レプリカ。jobs.txt の (system, replica) の組だけ
+#  投入され、空いている GPU から順に走ります。
+#
+#    cd condor && ./submit_all.sh
+#    condor_q
+#    python ../monitor.py --watch --runs ../runs
+#
+#  executable は submit_all.sh が絶対パスで -append します
+#  (NMRbox では executable に絶対パスが必要なため)。
+# ==========================================================================
+
+universe                = vanilla
+arguments               = "$(system) $(replica)"
+
+# --- 資源要求 (マッチしやすさ優先で最小限に) --------------------------------
+request_gpus            = 1
+request_cpus            = 1
+request_memory          = 2 GB
+request_disk            = 1 GB
+
+# GPU の条件はあえて何も付けない。
+#   * gpus_minimum_memory を指定しない -> どんな GPU でもマッチする
+#     (392 ビーズの単鎖なので必要な GPU メモリは数十 MB 程度)
+#   * GPUs_Capability も指定しない -> T4 / V100 などの旧世代も使う
+# 逆に速い GPU だけを狙いたくなったら、次の行を有効にしてください。
+#   requirements        = GPUs_Capability >= 8
+#   gpus_minimum_memory = 4000MB
+
+# NMR ソフトは一切使わず venv だけで完結しているので、
+# compute-only ノードも使って対象を広げる。
+# ここを True にすると production ノードだけに限定される (待ち時間は延びる)。
++Production             = False
+
+# --- 共有ファイルシステムを使う (NMRbox のノードは home を共有) -------------
+should_transfer_files   = NO
+transfer_executable     = FALSE
+getenv                  = True
+# initialdir はデフォルト (= このファイルのあるディレクトリ) のまま
+
+# --- ログ -------------------------------------------------------------------
+output                  = logs/$(system)_rep$(replica).out
+error                   = logs/$(system)_rep$(replica).err
+log                     = logs/condor.log
+stream_output           = True
+stream_error            = True
+
+# --- 中断・再開 -------------------------------------------------------------
+# simulate.py は config の max_wall_hours を超えるとチェックポイントを保存して
+# exit 85 する。下の行により、その場合ジョブは自動で再キューされ、
+# 次に走り出したときにチェックポイントから続行する。
+# NMRbox は「1 プロセス 8 時間以内」を推奨しているため、この仕組みで
+# 長い 1 us ランを短いジョブに自動分割できる。
+#
+# 遅い GPU に当たると再キュー回数が増えるので、上限は多めの 40 にしてある。
+on_exit_remove          = (ExitCode == 0) || (NumJobStarts >= 40)
+
+queue system, replica from jobs.txt
